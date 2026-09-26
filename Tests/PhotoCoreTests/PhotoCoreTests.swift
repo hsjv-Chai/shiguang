@@ -164,7 +164,11 @@ final class PhotoCoreTests: XCTestCase {
     }
     func testUndoRestartAfterRestoredCopyBeforeDestinationDeletion() throws {
         let path = try fixture(), before = try Fingerprint.read(path)
-        let plan = try service.archivePlan(photos: scan(), root: root.appendingPathComponent("archive"), cancellation: CancellationFlag())
+        var plan = try service.archivePlan(photos: scan(), root: root.appendingPathComponent("archive"), cancellation: CancellationFlag())
+        for j in plan.items[0].files.indices {
+            plan.items[0].files[j].transfer = nil
+            plan.items[0].files[j].before = try Fingerprint.read(plan.items[0].files[j].source)
+        }
         var result = try execute(plan)
         try FileManager.default.copyItem(atPath: result.items[0].files[0].destination, toPath: path)
         result.items[0].files[0].state = "undoing"; result.status = "undoing"; try store.save(result)

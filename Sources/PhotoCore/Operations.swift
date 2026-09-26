@@ -2,11 +2,11 @@ import Foundation
 import Darwin
 
 public final class OperationService: @unchecked Sendable {
-    private let store: Store
+    let store: Store
     private let metadata: MetadataService
-    private let fm = FileManager.default
-    private let forceCopy: Bool
-    private let checkpoint: (String) throws -> Void
+    let fm = FileManager.default
+    let forceCopy: Bool
+    let checkpoint: (String) throws -> Void
     public init(store: Store, metadata: MetadataService, forceCopy: Bool = false, checkpoint: @escaping (String) throws -> Void = { _ in }) { self.store = store; self.metadata = metadata; self.forceCopy = forceCopy; self.checkpoint = checkpoint }
     public static func component(_ value: String) -> String {
         let clean = value.components(separatedBy: CharacterSet(charactersIn: "/:\\").union(.controlCharacters)).joined(separator: "_").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,6 +47,7 @@ public final class OperationService: @unchecked Sendable {
                         let dst = dir.appendingPathComponent(stem).appendingPathExtension(URL(fileURLWithPath: src).pathExtension).path
                         var file = FileStep(source: src, destination: dst, before: nil)
                         file.previewSnapshot = try FileSnapshot.read(src)
+                        file.transfer = ArchiveTransfer(source: src, destination: dst, original: file.previewSnapshot!)
                         item.files.append(file)
                     }
                     occupiedByDirectory[dir.path]!.insert(stem.lowercased())
@@ -96,14 +97,14 @@ public final class OperationService: @unchecked Sendable {
         }
         return batch
     }
-    private func check(_ path: String, equals fingerprint: Fingerprint?) throws {
+    func check(_ path: String, equals fingerprint: Fingerprint?) throws {
         if let fingerprint {
             guard (try fm.attributesOfItem(atPath: path)[.type] as? FileAttributeType) == .typeRegular else { throw PhotoError.message("文件类型变化，拒绝操作：\(path)") }
             guard fm.fileExists(atPath: path), try Fingerprint.read(path) == fingerprint else { throw PhotoError.message("文件已变化或不可访问：\(URL(fileURLWithPath: path).lastPathComponent)") } }
         else if fm.fileExists(atPath: path) { throw PhotoError.message("目标已存在，未覆盖：\(path)") }
     }
     private func syncFile(_ path: String) throws { let h = try FileHandle(forWritingTo: URL(fileURLWithPath: path)); defer { try? h.close() }; try h.synchronize() }
-    private func persist(_ batch: OperationBatch, item: Int? = nil) throws { try store.save(batch, changedItem: item) }
+    func persist(_ batch: OperationBatch, item: Int? = nil) throws { try store.save(batch, changedItem: item) }
     public func execute(_ input: OperationBatch, backupRoot: URL, cancellation: CancellationFlag, activity: @Sendable (Int, Int, String) -> Void = { _, _, _ in }, progress: @Sendable (OperationBatch) -> Void) throws -> OperationBatch {
         var batch = input
         guard batch.status != "undone" && batch.status != "undoing" && batch.status != "undoFailed" else { throw PhotoError.message("该批次正在撤销，只能继续撤销") }
@@ -113,54 +114,58 @@ public final class OperationService: @unchecked Sendable {
             guard ["pending", "failed", "running"].contains(batch.items[i].status) else { continue }
             do {
                 batch.items[i].status = "running"; batch.items[i].error = nil; try persist(batch, item: i)
-                if batch.kind == "archive" {
-                    // Capture all hashes before the first mutation; cancelling here leaves the group untouched.
-                    var prepared = batch.items[i].files
-                    for j in prepared.indices where prepared[j].before == nil {
-                        let file = prepared[j]
-                        guard file.state == "pending", let snapshot = file.previewSnapshot,
-                              try FileSnapshot.read(file.source) == snapshot else { throw PhotoError.message("预览后文件已变化，请重新生成预览：" + file.source) }
-                        var lastReport = Date.distantPast
-                        prepared[j].before = try Fingerprint.read(file.source, cancellation: cancellation) { bytes in
-                            if Date().timeIntervalSince(lastReport) >= 0.2 {
-                                let amount = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
-                                let total = ByteCountFormatter.string(fromByteCount: snapshot.size, countStyle: .file)
-                                activity(i, batch.items.count, "正在校验 " + URL(fileURLWithPath: file.source).lastPathComponent + " · " + amount + " / " + total)
-                                lastReport = Date()
+                if batch.kind == "archive", batch.items[i].files.allSatisfy({ $0.transfer != nil }) {
+                    try executeArchive(&batch, i: i, cancellation: cancellation, activity: activity)
+                } else {
+                    if batch.kind == "archive" {
+                        // Capture all hashes before the first mutation; cancelling here leaves the group untouched.
+                        var prepared = batch.items[i].files
+                        for j in prepared.indices where prepared[j].before == nil {
+                            let file = prepared[j]
+                            guard file.state == "pending", let snapshot = file.previewSnapshot,
+                                  try FileSnapshot.read(file.source) == snapshot else { throw PhotoError.message("预览后文件已变化，请重新生成预览：" + file.source) }
+                            var lastReport = Date.distantPast
+                            prepared[j].before = try Fingerprint.read(file.source, cancellation: cancellation) { bytes in
+                                if Date().timeIntervalSince(lastReport) >= 0.2 {
+                                    let amount = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+                                    let total = ByteCountFormatter.string(fromByteCount: snapshot.size, countStyle: .file)
+                                    activity(i, batch.items.count, "正在校验 " + URL(fileURLWithPath: file.source).lastPathComponent + " · " + amount + " / " + total)
+                                    lastReport = Date()
+                                }
                             }
+                            guard try FileSnapshot.read(file.source) == snapshot else { throw PhotoError.message("校验期间文件已变化：" + file.source) }
                         }
-                        guard try FileSnapshot.read(file.source) == snapshot else { throw PhotoError.message("校验期间文件已变化：" + file.source) }
+                        batch.items[i].files = prepared; try persist(batch, item: i)
+                        activity(i, batch.items.count, "正在移动 " + batch.items[i].photo.name)
                     }
-                    batch.items[i].files = prepared; try persist(batch, item: i)
-                    activity(i, batch.items.count, "正在移动 " + batch.items[i].photo.name)
-                }
-                // Check the entire group before the first mutation.
-                for f in batch.items[i].files where f.state == "pending" || f.state == "readonly" { try check(f.source, equals: f.before) }
-                for f in batch.items[i].files where f.state == "done" {
-                    try check(batch.kind == "archive" ? f.destination : f.source, equals: batch.kind == "archive" ? f.before : f.after)
-                }
-                if batch.kind == "archive" {
-                    for f in batch.items[i].files where f.state == "pending" { try check(f.destination, equals: nil) }
-                }
-                if batch.kind == "time" {
-                    // All backups must exist and match before any write in this group.
-                    for j in batch.items[i].files.indices where batch.items[i].files[j].state != "readonly" {
-                        var f = batch.items[i].files[j]
-                        if let before = f.before, f.backup == nil {
-                            try check(f.source, equals: before)
-                            let dir = backupRoot.appendingPathComponent(batch.id).appendingPathComponent(batch.items[i].id)
-                            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-                            let target = dir.appendingPathComponent("\(j)-" + URL(fileURLWithPath: f.source).lastPathComponent)
-                            if fm.fileExists(atPath: target.path) { try check(target.path, equals: before) }
-                            else { try fm.copyItem(atPath: f.source, toPath: target.path); try syncFile(target.path); try check(target.path, equals: before) }
-                            f.backup = target.path; batch.items[i].files[j] = f; try persist(batch, item: i)
+                    // Check the entire group before the first mutation.
+                    for f in batch.items[i].files where f.state == "pending" || f.state == "readonly" { try check(f.source, equals: f.before) }
+                    for f in batch.items[i].files where f.state == "done" {
+                        try check(batch.kind == "archive" ? f.destination : f.source, equals: batch.kind == "archive" ? f.before : f.after)
+                    }
+                    if batch.kind == "archive" {
+                        for f in batch.items[i].files where f.state == "pending" { try check(f.destination, equals: nil) }
+                    }
+                    if batch.kind == "time" {
+                        // All backups must exist and match before any write in this group.
+                        for j in batch.items[i].files.indices where batch.items[i].files[j].state != "readonly" {
+                            var f = batch.items[i].files[j]
+                            if let before = f.before, f.backup == nil {
+                                try check(f.source, equals: before)
+                                let dir = backupRoot.appendingPathComponent(batch.id).appendingPathComponent(batch.items[i].id)
+                                try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+                                let target = dir.appendingPathComponent("\(j)-" + URL(fileURLWithPath: f.source).lastPathComponent)
+                                if fm.fileExists(atPath: target.path) { try check(target.path, equals: before) }
+                                else { try fm.copyItem(atPath: f.source, toPath: target.path); try syncFile(target.path); try check(target.path, equals: before) }
+                                f.backup = target.path; batch.items[i].files[j] = f; try persist(batch, item: i)
+                            }
+                            if let before = f.before, let backup = f.backup { try check(backup, equals: before) }
                         }
-                        if let before = f.before, let backup = f.backup { try check(backup, equals: before) }
                     }
-                }
-                for j in batch.items[i].files.indices {
-                    if batch.items[i].files[j].state == "readonly" { continue }
-                    if batch.kind == "archive" { try moveStep(&batch, i: i, j: j) } else { try editStep(&batch, i: i, j: j); try checkpoint("afterTimeMember") }
+                    for j in batch.items[i].files.indices {
+                        if batch.items[i].files[j].state == "readonly" { continue }
+                        if batch.kind == "archive" { try moveStep(&batch, i: i, j: j) } else { try editStep(&batch, i: i, j: j); try checkpoint("afterTimeMember") }
+                    }
                 }
                 var photo = batch.items[i].photo
                 if batch.kind == "archive" {
@@ -253,60 +258,65 @@ public final class OperationService: @unchecked Sendable {
         }
         return count
     }
-    public func undo(_ input: OperationBatch, cancellation: CancellationFlag, progress: @Sendable (OperationBatch) -> Void) throws -> OperationBatch {
+    public func undo(_ input: OperationBatch, cancellation: CancellationFlag, activity: @Sendable (Int, Int, String) -> Void = { _, _, _ in }, progress: @Sendable (OperationBatch) -> Void) throws -> OperationBatch {
         var batch = input; batch.status = "undoing"; try persist(batch)
         for i in batch.items.indices.reversed() {
             if cancellation.isCancelled { break }
-            if ["undone", "skipped", "blocked", "pending"].contains(batch.items[i].status) { continue }
+            if ["undone", "skipped", "blocked"].contains(batch.items[i].status) { continue }
+            if batch.items[i].status == "pending", !batch.items[i].files.allSatisfy({ $0.transfer != nil }) { continue }
             do {
-                if batch.kind == "archive", !batch.items[i].files.isEmpty,
-                   batch.items[i].files.allSatisfy({ $0.state == "pending" && $0.before == nil && $0.previewSnapshot != nil }) {
-                    // A cancelled/failed deferred preflight never touched these files.
-                    batch.items[i].status = "undone"; batch.items[i].error = nil
-                    try persist(batch, item: i); progress(batch); continue
-                }
-                // Preflight all members: never overwrite changes made by another app.
-                for f in batch.items[i].files where f.state == "readonly" { try check(f.source, equals: f.before) }
-                for f in batch.items[i].files where f.state != "readonly" && f.state != "undone" {
-                    if batch.kind == "archive" {
-                        if fm.fileExists(atPath: f.destination) { try check(f.destination, equals: f.before); try check(f.source, equals: ["undoing", "destinationCommitted", "committing"].contains(f.state) && fm.fileExists(atPath: f.source) ? f.before : nil) }
-                        else { try check(f.source, equals: f.before) }
-                    } else {
-                        let current = fm.fileExists(atPath: f.source) ? try Fingerprint.read(f.source) : nil
-                        guard current == f.after || current == f.before else { throw PhotoError.message("文件被外部修改，无法安全撤销：\(f.source)") }
-                        if f.before != nil, current != f.before { guard let backup = f.backup else { throw PhotoError.message("原片备份缺失") }; try check(backup, equals: f.before) }
+                if batch.kind == "archive", batch.items[i].files.allSatisfy({ $0.transfer != nil }) {
+                    try undoArchive(&batch, i: i, cancellation: cancellation, activity: activity)
+                } else {
+                    if batch.kind == "archive", !batch.items[i].files.isEmpty,
+                       batch.items[i].files.allSatisfy({ $0.state == "pending" && $0.before == nil && $0.previewSnapshot != nil }) {
+                        // A cancelled/failed deferred preflight never touched these files.
+                        batch.items[i].status = "undone"; batch.items[i].error = nil
+                        try persist(batch, item: i); progress(batch); continue
                     }
-                }
-                for j in batch.items[i].files.indices.reversed() {
-                    var f = batch.items[i].files[j]
-                    if f.state == "readonly" || f.state == "undone" { continue }
-                    f.state = "undoing"; batch.items[i].files[j] = f; try persist(batch, item: i)
-                    if batch.kind == "archive" {
-                        if fm.fileExists(atPath: f.destination) {
-                            if fm.fileExists(atPath: f.source) {
-                                try check(f.source, equals: f.before); try check(f.destination, equals: f.before)
-                                try fm.removeItem(atPath: f.destination)
-                                f.state = "undone"; batch.items[i].files[j] = f; try persist(batch, item: i); continue
-                            }
-                            try fm.createDirectory(at: URL(fileURLWithPath: f.source).deletingLastPathComponent(), withIntermediateDirectories: true)
-                            // copy/verify/delete is restartable across volumes and never overwrites.
-                            let temp = f.source + ".photoarchive-undo-" + batch.id
-                            if fm.fileExists(atPath: temp), (try? Fingerprint.read(temp)) != f.before { try fm.removeItem(atPath: temp) }
-                            if !fm.fileExists(atPath: temp) { try fm.copyItem(atPath: f.destination, toPath: temp) }
-                            try syncFile(temp); try check(temp, equals: f.before); try check(f.destination, equals: f.before); try check(f.source, equals: nil)
-                            try fm.moveItem(atPath: temp, toPath: f.source); try fm.removeItem(atPath: f.destination)
+                    // Preflight all members: never overwrite changes made by another app.
+                    for f in batch.items[i].files where f.state == "readonly" { try check(f.source, equals: f.before) }
+                    for f in batch.items[i].files where f.state != "readonly" && f.state != "undone" {
+                        if batch.kind == "archive" {
+                            if fm.fileExists(atPath: f.destination) { try check(f.destination, equals: f.before); try check(f.source, equals: ["undoing", "destinationCommitted", "committing"].contains(f.state) && fm.fileExists(atPath: f.source) ? f.before : nil) }
+                            else { try check(f.source, equals: f.before) }
+                        } else {
+                            let current = fm.fileExists(atPath: f.source) ? try Fingerprint.read(f.source) : nil
+                            guard current == f.after || current == f.before else { throw PhotoError.message("文件被外部修改，无法安全撤销：\(f.source)") }
+                            if f.before != nil, current != f.before { guard let backup = f.backup else { throw PhotoError.message("原片备份缺失") }; try check(backup, equals: f.before) }
                         }
-                    } else if (fm.fileExists(atPath: f.source) ? try Fingerprint.read(f.source) : nil) != f.before {
-                        if let backup = f.backup, f.before != nil {
-                            let temp = f.source + ".photoarchive-undo-" + batch.id
-                            if fm.fileExists(atPath: temp) { try fm.removeItem(atPath: temp) }
-                            try fm.copyItem(atPath: backup, toPath: temp); try syncFile(temp); try check(temp, equals: f.before)
-                            try check(f.source, equals: f.after)
-                            guard rename(temp, f.source) == 0 else { throw PhotoError.message("恢复备份失败") }
-                        } else { try check(f.source, equals: f.after); try fm.removeItem(atPath: f.source) }
                     }
-                    if let temp = f.staged, fm.fileExists(atPath: temp) { try fm.removeItem(atPath: temp) }
-                    f.state = "undone"; batch.items[i].files[j] = f; try persist(batch, item: i)
+                    for j in batch.items[i].files.indices.reversed() {
+                        var f = batch.items[i].files[j]
+                        if f.state == "readonly" || f.state == "undone" { continue }
+                        f.state = "undoing"; batch.items[i].files[j] = f; try persist(batch, item: i)
+                        if batch.kind == "archive" {
+                            if fm.fileExists(atPath: f.destination) {
+                                if fm.fileExists(atPath: f.source) {
+                                    try check(f.source, equals: f.before); try check(f.destination, equals: f.before)
+                                    try fm.removeItem(atPath: f.destination)
+                                    f.state = "undone"; batch.items[i].files[j] = f; try persist(batch, item: i); continue
+                                }
+                                try fm.createDirectory(at: URL(fileURLWithPath: f.source).deletingLastPathComponent(), withIntermediateDirectories: true)
+                                // copy/verify/delete is restartable across volumes and never overwrites.
+                                let temp = f.source + ".photoarchive-undo-" + batch.id
+                                if fm.fileExists(atPath: temp), (try? Fingerprint.read(temp)) != f.before { try fm.removeItem(atPath: temp) }
+                                if !fm.fileExists(atPath: temp) { try fm.copyItem(atPath: f.destination, toPath: temp) }
+                                try syncFile(temp); try check(temp, equals: f.before); try check(f.destination, equals: f.before); try check(f.source, equals: nil)
+                                try fm.moveItem(atPath: temp, toPath: f.source); try fm.removeItem(atPath: f.destination)
+                            }
+                        } else if (fm.fileExists(atPath: f.source) ? try Fingerprint.read(f.source) : nil) != f.before {
+                            if let backup = f.backup, f.before != nil {
+                                let temp = f.source + ".photoarchive-undo-" + batch.id
+                                if fm.fileExists(atPath: temp) { try fm.removeItem(atPath: temp) }
+                                try fm.copyItem(atPath: backup, toPath: temp); try syncFile(temp); try check(temp, equals: f.before)
+                                try check(f.source, equals: f.after)
+                                guard rename(temp, f.source) == 0 else { throw PhotoError.message("恢复备份失败") }
+                            } else { try check(f.source, equals: f.after); try fm.removeItem(atPath: f.source) }
+                        }
+                        if let temp = f.staged, fm.fileExists(atPath: temp) { try fm.removeItem(atPath: temp) }
+                        f.state = "undone"; batch.items[i].files[j] = f; try persist(batch, item: i)
+                    }
                 }
                 var restored = batch.items[i].photo
                 if let latest = try store.photo(id: restored.id) { restored.place = latest.place; restored.manualPlace = latest.manualPlace }

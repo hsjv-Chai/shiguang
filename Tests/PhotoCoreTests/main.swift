@@ -46,6 +46,15 @@ let cases: [(String, () throws -> Void)] = [
     ("一万张扫描和取消恢复", tests.testTenThousandScanAndCancellation)
 ]
 let extra: [(String, () throws -> Void)] = [
+    ("归档优化：读取次数与元数据", tests.testArchiveReadCountsAndMetadata),
+    ("归档优化：提交故障恢复", tests.testArchiveFaultWindows),
+    ("归档优化：复制损坏与整组准备", tests.testArchiveCopyCorruptionAndGroupPreparation),
+    ("归档优化：写入失败取消与清理", tests.testArchiveWriteFailureCancellationAndCleanup),
+    ("归档优化：外部修改与提交冲突", tests.testArchiveExternalChangesAndCommitCollision),
+    ("归档优化：撤销故障恢复", tests.testArchiveUndoFaultWindows),
+    ("归档优化：删除保护与跨盘回退", tests.testArchiveDeleteGuardsFallbackAndUndoDiscard),
+    ("归档优化：恢复身份与旧日志兼容", tests.testArchiveRecoveryRejectsReplacedTargetAndLegacyJSON),
+    ("归档优化：真实数据计时", tests.testArchiveRealDataBenchmark),
     ("归档性能：80GB 批量快速预览", tests.testLargeArchivePreviewIsMetadataOnly),
     ("归档性能：延迟校验变更检测与取消", tests.testDeferredArchiveDetectsChangesAndCancels),
     ("归档性能：执行不重读元数据", tests.testArchiveFastPathAvoidsMetadataReread),

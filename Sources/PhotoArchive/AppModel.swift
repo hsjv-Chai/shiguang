@@ -131,12 +131,13 @@ import PhotoCore
                             self.fraction = fraction; self.status = status
                         }
                     }
-                    return try undo ? operations.undo(batch, cancellation: flag, progress: report) : operations.execute(batch, backupRoot: backup, cancellation: flag, activity: { done, total, detail in
+                    let activity: @Sendable (Int, Int, String) -> Void = { done, total, detail in
                         Task { @MainActor in
                             guard self.busy, !flag.isCancelled else { return }
-                            self.fraction = Double(done) / Double(max(1, total)); self.status = "归档 · \(done) / \(total) 张 · \(detail)"
+                            self.fraction = Double(done) / Double(max(1, total)); self.status = "\(undo ? "撤销" : "归档") · \(done) / \(total) 张 · \(detail)"
                         }
-                    }, progress: report)
+                    }
+                    return try undo ? operations.undo(batch, cancellation: flag, activity: activity, progress: report) : operations.execute(batch, backupRoot: backup, cancellation: flag, activity: activity, progress: report)
                 }.value
                 status = "\(result.title) · \(localizedStatus(result.status))"
                 if result.items.contains(where: { $0.status == "failed" || $0.status == "undoFailed" }) { showHistory = true }

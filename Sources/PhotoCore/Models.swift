@@ -88,7 +88,7 @@ public struct Photo: Codable, Identifiable, Hashable, Sendable {
     public static func ==(l: Photo, r: Photo) -> Bool { l.id == r.id && l.path == r.path && l.capture == r.capture && l.place == r.place && l.problem == r.problem && l.members == r.members && l.sidecar == r.sidecar && l.sidecarCapture == r.sidecarCapture && l.sidecarBytes == r.sidecarBytes && l.captureSource == r.captureSource && l.notice == r.notice && l.bytes == r.bytes && l.latitude == r.latitude && l.longitude == r.longitude && l.manualPlace == r.manualPlace && l.source == r.source }
     public func hash(into h: inout Hasher) { h.combine(id) }
 }
-/// A cheap preview snapshot. Full content hashes are captured before execution.
+/// File identity and change state; rename changes ctime even when content is unchanged.
 public struct FileSnapshot: Codable, Equatable, Sendable {
     public var size: Int64
     public var device: Int32
@@ -100,7 +100,17 @@ public struct FileSnapshot: Codable, Equatable, Sendable {
     public static func read(_ path: String) throws -> FileSnapshot {
         var info = stat()
         guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { throw PhotoError.message("文件不可访问或不是普通文件：" + path) }
-        return FileSnapshot(size: info.st_size, device: info.st_dev, inode: info.st_ino,
+        return from(info)
+    }
+    static func read(descriptor: Int32) throws -> FileSnapshot {
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
+            throw PhotoError.message("文件句柄不可访问或不是普通文件")
+        }
+        return from(info)
+    }
+    private static func from(_ info: stat) -> FileSnapshot {
+        FileSnapshot(size: info.st_size, device: info.st_dev, inode: info.st_ino,
             modifiedSeconds: Int64(info.st_mtimespec.tv_sec), modifiedNanoseconds: Int64(info.st_mtimespec.tv_nsec),
             changedSeconds: Int64(info.st_ctimespec.tv_sec), changedNanoseconds: Int64(info.st_ctimespec.tv_nsec))
     }
@@ -123,6 +133,8 @@ public struct Fingerprint: Codable, Equatable, Sendable {
 public struct FileStep: Codable, Equatable, Sendable {
     public var source: String
     public var destination: String
+    public var transfer: ArchiveTransfer?
+    public var undoTransfer: ArchiveTransfer?
     public var previewSnapshot: FileSnapshot?
     public var before: Fingerprint?
     public var after: Fingerprint?
@@ -153,4 +165,20 @@ public final class CancellationFlag: @unchecked Sendable {
     public init() {}
     public func cancel() { lock.lock(); value = true; lock.unlock() }
     public var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return value }
+}
+
+/// Versioned archive journal. Missing journals retain the legacy fingerprint workflow.
+public struct ArchiveTransfer: Codable, Equatable, Sendable {
+    public var source: String
+    public var destination: String
+    public var original: FileSnapshot
+    public var strategy: String = "automatic"
+    public var phase: String = "pending"
+    public var staged: String?
+    public var stagedSnapshot: FileSnapshot?
+    public var result: FileSnapshot?
+    public var fingerprint: Fingerprint?
+    public init(source: String, destination: String, original: FileSnapshot) {
+        self.source = source; self.destination = destination; self.original = original
+    }
 }
