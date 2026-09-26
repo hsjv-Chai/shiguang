@@ -1,0 +1,30 @@
+warning: /Users/hsjv/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'myphotos': failed storing manifest for 'myphotos' in cache: attempt to write a readonly database
+Building for debugging...
+[2 / 5] PhotoCore
+[3 / 6] PhotoCore
+[5 / 7] PhotoCore
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCore: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[10 / 13] PhotoCoreChecks-product
+[13 / 16] PhotoCoreChecks-product
+[15 / 17] PhotoCoreChecks-product
+[17 / 19] PhotoCoreChecks-product/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+
+Build complete! (1.45秒)
+PASS Canon 配对扫描和旧索引合并
+PASS Canon 配对迟到缺失和恢复
+PASS Canon 配对范围和批次边界
+PASS Canon 真正的配套歧义
+PASS Canon 时间优先级和 GPS
+PASS Canon 三种校时及逐字节撤销
+PASS Canon 既有 XMP 与零偏移同步
+PASS Canon 整组归档冲突重试和撤销
+PASS Canon 校时恢复和只读成员校验
+PASS Canon 旧历史拆分与重新合并
+PASS Canon 部分校时写入恢复和取消
+PASS Canon 整组操作前检查
+PASS Canon 旧 JPG 校时历史撤销
+RESULT: 0 failures; 9.064170956611633 seconds

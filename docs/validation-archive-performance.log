@@ -1,0 +1,44 @@
+warning: /Users/hsjv/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'myphotos': failed storing manifest for 'myphotos' in cache: attempt to write a readonly database
+Building for debugging...
+Build complete! (0.15秒)
+PASS 日期边界与时区
+PASS 普通照片格式写入及逐字节撤销
+PASS RAW 不变及新 XMP 撤销
+PASS 保留既有 XMP 信息并恢复
+PASS 重名归档与配套文件撤销
+PASS 预览后源文件变化
+PASS 目标冲突不覆盖
+PASS 撤销拒绝外部修改
+PASS 备份失败不改原片
+PASS Canon 配对扫描和旧索引合并
+PASS Canon 配对迟到缺失和恢复
+PASS Canon 配对范围和批次边界
+PASS Canon 真正的配套歧义
+PASS Canon 时间优先级和 GPS
+PASS Canon 三种校时及逐字节撤销
+PASS Canon 既有 XMP 与零偏移同步
+PASS Canon 整组归档冲突重试和撤销
+PASS Canon 校时恢复和只读成员校验
+PASS Canon 旧历史拆分与重新合并
+PASS Canon 部分校时写入恢复和取消
+PASS Canon 整组操作前检查
+PASS Canon 旧 JPG 校时历史撤销
+PASS 跨盘流程中断后重试
+PASS 取消和恢复不重复偏移
+PASS 提交后崩溃恢复
+PASS 缺失拍摄时间
+PASS GPS 正负与手动地点持久化
+BENCHMARK: 10000 files scanned with cancellation/resume in 39.60226106643677 seconds
+PASS 一万张扫描和取消恢复
+BENCHMARK: 1000 JPG+CR2 groups / 80 GB sparse archive preview in 0.08413195610046387 seconds; directory listings: 1
+PASS 归档性能：80GB 批量快速预览
+PASS 归档性能：延迟校验变更检测与取消
+PASS 归档性能：执行不重读元数据
+PASS 跨盘删除前失败直接撤销
+PASS 撤销提交途中重启
+PASS 拒绝直接扫描系统照片图库
+PASS 损坏备份阻止重试写入
+RESULT: 0 failures; 58.7669860124588 seconds

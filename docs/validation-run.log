@@ -1,0 +1,38 @@
+warning: /Users/hsjv/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'myphotos': failed storing manifest for 'myphotos' in cache: attempt to write a readonly database
+Building for debugging...
+[2 / 4] PhotoCore
+[5 / 7] PhotoCore
+[7 / 9] PhotoCore
+[8 / 10] PhotoCore
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCore: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[15 / 19] PhotoCoreChecks-product
+[19 / 22] PhotoCoreChecks-product
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[21 / 22] PhotoCoreChecks-product
+Build complete! (1.38秒)
+PASS 日期边界与时区
+PASS 普通照片格式写入及逐字节撤销
+PASS RAW 不变及新 XMP 撤销
+PASS 保留既有 XMP 信息并恢复
+PASS 重名归档与配套文件撤销
+PASS 预览后源文件变化
+PASS 目标冲突不覆盖
+PASS 撤销拒绝外部修改
+PASS 备份失败不改原片
+PASS XMP 配套歧义
+PASS 跨盘流程中断后重试
+PASS 取消和恢复不重复偏移
+PASS 提交后崩溃恢复
+PASS 缺失拍摄时间
+PASS GPS 正负与手动地点持久化
+BENCHMARK: 10000 files scanned with cancellation/resume in 38.45123791694641 seconds
+PASS 一万张扫描和取消恢复
+PASS 跨盘删除前失败直接撤销
+PASS 撤销提交途中重启
+PASS 拒绝直接扫描系统照片图库
+PASS 损坏备份阻止重试写入
+RESULT: 0 failures; 45.49465310573578 seconds
