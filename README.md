@@ -53,3 +53,15 @@ SQLite 数据库在 `~/Library/Application Support/PhotoArchive/library.sqlite`�
 ## 验证结果和边界
 
 详见 `VALIDATION.md`。照片测试覆盖的是已列出的夹具及生成图像；RAW 缩略图由系统 ImageIO 支持程度决定，不支持时显示占位图。保留备份可以恢复原始文件字节，但不能承诺保持每种外部照片软件的所有缓存和显示习惯。
+
+## 应用图标
+
+图标采用 UI 同款苔绿 `#40614D`、暖白 `#F5F2EA` 与叠放相片，使用原创矢量形状。设计及资源位于 `assets/AppIcon/`：
+
+- `AppIcon.svg`：1024 × 1024 可编辑矢量图，包含独立 `background`、`foreground` 分组。
+- `AppIcon-1024.png`、`AppIcon-preview.png`：透明底母版及浅深背景下的多尺寸预览。
+- `AppIcon.iconset/`、`AppIcon.icns`：macOS 传统图标，包含 16、32、128、256、512 点的 1× / 2× 资源。16、32 点版本减少阴影、取消前景旋转并放大光点，改善小尺寸辨识。
+
+运行 `./scripts/generate-app-icon.sh` 可重新生成全部资源，使用 macOS 自带 Swift/AppKit/Core Graphics 和 `iconutil`，无需额外依赖。几何与颜色的生成源为 `scripts/generate-app-icon.swift`；调整设计时修改此文件，避免下次生成覆盖单独编辑的 SVG。`./scripts/build-app.sh` 会自动生成并嵌入图标，然后签名应用。
+
+当前交付为兼容 macOS 14+ 的静态 `.icns`，圆角底板之外保留透明边距；不是 Icon Composer 的动态 Liquid Glass 资源。未来迁移时应从分层源文件重新导出满幅背景，并由新管线施加系统蒙版，避免双重圆角。

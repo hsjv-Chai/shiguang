@@ -24,6 +24,16 @@ import PhotoCore
     }
 }
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) { NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        // Set the running Dock tile explicitly: Launch Services may retain a
+        // generic icon when this locally built bundle is replaced in place.
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: url) {
+            app.applicationIconImage = icon
+        }
+        app.activate(ignoringOtherApps: true)
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }

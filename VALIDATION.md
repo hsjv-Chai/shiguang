@@ -72,3 +72,21 @@
 新增验证：1,000 组 JPG + CR2、2,000 个各 40 MB 的稀疏测试文件（标称 80 GB）快速预览；断言所有文件仅保存状态快照、没有预读内容哈希，目标目录仅枚举一次。首次本地测试约 0.09 秒。此结果仅代表本机稀疏文件预览，不代表真实 SD 卡传输速度。
 
 同时覆盖延迟校验时取消/恢复、相同长度改写后恢复 mtime 仍被检测、未移动失败项撤销，以及 ExifTool 不可用时现代归档/撤销仍能完成而不重读元数据。完整回归输出见 `docs/validation-archive-performance.log`。
+
+## 应用图标（2026-09-26）
+
+- 新增苔绿背景、暖白叠放相片的矢量图标与可重复运行的生成脚本；SVG 与 PNG 使用同一套几何定义。
+- 检查了 1024 像素母版，以及浅/深背景下 16、32、64、128、256、512 像素预览。小尺寸使用简化图形。
+- `iconutil` 成功封装并反解出全部 10 个标准图标文件；PNG 尺寸正确。
+- Release 构建完成；`Info.plist` 通过 `plutil -lint`，`CFBundleIconFile` 为 `AppIcon`，包内图标与源资源逐字节一致；`codesign --verify --deep --strict` 通过。
+- 应用已启动，Finder 中的新图标已通过截图确认。Dock 截图接口连续超时，Dock 和应用切换器的实际外观未完成目视验收。
+- 分发 ZIP 已随 `.app` 更新。Command Line Tools 链接器仍提示 Developer Frameworks / usr/lib 搜索路径不存在，未阻止本次构建。
+- 沙盒内 `iconutil` 曾报告 Invalid Iconset；相同资源在获准的沙盒外系统工具调用中成功，无须修改图标规格。
+
+### Dock 默认图标修复
+
+用户确认 Finder 正常但运行中的 Dock 显示默认图标。启动代理现于设置 regular 激活策略后，从主应用包加载 `AppIcon.icns` 并显式设置 `NSApplication.applicationIconImage`，避免仅依赖系统对本地替换包的图标缓存。构建号更新为 2。
+
+修复后 Release 构建、深度签名校验通过，已退出并重新启动应用，窗口正常显示；ZIP 同步更新。Dock 外观需用户确认（工具无法获取 Dock 截图），不将推测的缓存原因视为已证实根因。
+
+用户随后确认：修复版重新打开后，Dock 已正常显示绿色相片图标。
