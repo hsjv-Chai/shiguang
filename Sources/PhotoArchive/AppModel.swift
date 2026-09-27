@@ -113,7 +113,19 @@ import PhotoCore
         guard let operations else { return }; let photos = selected
         showTime = false; start("正在生成时间修改预览…"); let flag = flag
         Task {
-            do { let result = try await Task.detached { try operations.timePlan(photos: photos, edit: edit, cancellation: flag) }.value; if !flag.isCancelled { plan = result }; status = "时间修改预览已准备好" }
+            do {
+                let result = try await Task.detached {
+                    try operations.timePlan(photos: photos, edit: edit, cancellation: flag) { done, total, detail in
+                        Task { @MainActor in
+                            guard self.busy, !flag.isCancelled else { return }
+                            self.fraction = Double(done) / Double(max(1, total))
+                            self.status = "生成校时预览 · \(done) / \(total) 张 · \(detail)"
+                        }
+                    }
+                }.value
+                if !flag.isCancelled && result.status != "cancelled" { plan = result; fraction = 1 }
+                status = flag.isCancelled || result.status == "cancelled" ? "已停止生成预览，照片未修改。" : "时间修改预览已准备好"
+            }
             catch { self.error = error.localizedDescription }; busy = false
         }
     }
@@ -134,7 +146,7 @@ import PhotoCore
                     let activity: @Sendable (Int, Int, String) -> Void = { done, total, detail in
                         Task { @MainActor in
                             guard self.busy, !flag.isCancelled else { return }
-                            self.fraction = Double(done) / Double(max(1, total)); self.status = "\(undo ? "撤销" : "归档") · \(done) / \(total) 张 · \(detail)"
+                            self.fraction = Double(done) / Double(max(1, total)); self.status = "\(undo ? "撤销" : batch.kind == "time" ? "校时" : "归档") · \(done) / \(total) 张 · \(detail)"
                         }
                     }
                     return try undo ? operations.undo(batch, cancellation: flag, activity: activity, progress: report) : operations.execute(batch, backupRoot: backup, cancellation: flag, activity: activity, progress: report)

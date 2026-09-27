@@ -46,6 +46,15 @@ let cases: [(String, () throws -> Void)] = [
     ("一万张扫描和取消恢复", tests.testTenThousandScanAndCancellation)
 ]
 let extra: [(String, () throws -> Void)] = [
+    ("校时优化：批量预览与大 RAW", tests.testTimePreviewBatchesAndLargeRAW),
+    ("校时优化：取消运行中的元数据进程", tests.testTimePreviewCancelsRunningMetadataProcess),
+    ("校时优化：文件错误隔离与预览变化", tests.testTimePreviewIsolationAndChanges),
+    ("校时优化：读取次数与小数秒", tests.testTimeExecutionReadsAndFractions),
+    ("校时优化：提交和撤销故障恢复", tests.testTimeFaultWindowsAndRecovery),
+    ("校时优化：写入失败取消和 XMP 冲突", tests.testTimeFailuresCancelAndNewXMPConflict),
+    ("校时优化：整组准备失败和写入取消", tests.testTimePreparationFailureAndWriteCancellation),
+    ("校时优化：等长修改与文件替换", tests.testTimeEqualLengthModificationAndReplacement),
+    ("校时优化：旧日志和损坏备份", tests.testTimeLegacyJournalAndCorruptDurableBackup),
     ("归档优化：读取次数与元数据", tests.testArchiveReadCountsAndMetadata),
     ("归档优化：提交故障恢复", tests.testArchiveFaultWindows),
     ("归档优化：复制损坏与整组准备", tests.testArchiveCopyCorruptionAndGroupPreparation),

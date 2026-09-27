@@ -3,7 +3,7 @@ import Darwin
 
 public final class OperationService: @unchecked Sendable {
     let store: Store
-    private let metadata: MetadataService
+    let metadata: MetadataService
     let fm = FileManager.default
     let forceCopy: Bool
     let checkpoint: (String) throws -> Void
@@ -62,41 +62,6 @@ public final class OperationService: @unchecked Sendable {
         if cancellation.isCancelled { batch.status = "cancelled" }
         return batch
     }
-    public func timePlan(photos: [Photo], edit: TimeEdit, cancellation: CancellationFlag) throws -> OperationBatch {
-        var batch = OperationBatch(kind: "time", items: [])
-        var reserved = Set<String>()
-        for photo in photos {
-            if cancellation.isCancelled { break }
-            var item = OperationItem(photo: photo, files: [])
-            do {
-                if let problem = photo.problem { throw PhotoError.message(problem) }
-                // Every source member must still exist, including read-only RAW files.
-                for member in photo.files { _ = try Fingerprint.read(member.path) }
-                if let sidecar = photo.sidecar { _ = try Fingerprint.read(sidecar) }
-                let capture = try edit.apply(to: photo.capture); item.newCapture = capture
-                let xmp = photo.sidecar ?? (photo.hasRAW ? URL(fileURLWithPath: photo.path).deletingPathExtension().appendingPathExtension("xmp").path : nil)
-                let paths = photo.files.filter { !$0.isRAW }.map(\.path) + (xmp.map { [$0] } ?? [])
-                if let xmp, photo.sidecar == nil, fm.fileExists(atPath: xmp) { throw PhotoError.message("配套文件已出现，请重新扫描") }
-                let rows = try metadata.read(paths.filter { fm.fileExists(atPath: $0) })
-                if !paths.isEmpty && paths.allSatisfy({ rows[$0].flatMap { metadata.capture($0) } == capture }) {
-                    item.status = "skipped"; item.error = "所有配套文件时间均未变化"; batch.items.append(item); continue
-                }
-                for path in paths {
-                    guard !reserved.contains(path.lowercased()) else { throw PhotoError.message("多张照片共享同一元数据文件") }
-                    if path == xmp && photo.sidecar == nil && fm.fileExists(atPath: path) { throw PhotoError.message("配套文件已出现，请重新扫描") }
-                    let before = fm.fileExists(atPath: path) ? try Fingerprint.read(path) : nil
-                    item.files.append(FileStep(source: path, destination: path, before: before)); reserved.insert(path.lowercased())
-                }
-                for member in photo.files where member.isRAW {
-                    item.files.append(FileStep(source: member.path, destination: member.path, before: try Fingerprint.read(member.path)))
-                    item.files[item.files.count - 1].state = "readonly"
-                }
-
-            } catch { item.status = "blocked"; item.error = error.localizedDescription }
-            batch.items.append(item)
-        }
-        return batch
-    }
     func check(_ path: String, equals fingerprint: Fingerprint?) throws {
         if let fingerprint {
             guard (try fm.attributesOfItem(atPath: path)[.type] as? FileAttributeType) == .typeRegular else { throw PhotoError.message("文件类型变化，拒绝操作：\(path)") }
@@ -116,6 +81,8 @@ public final class OperationService: @unchecked Sendable {
                 batch.items[i].status = "running"; batch.items[i].error = nil; try persist(batch, item: i)
                 if batch.kind == "archive", batch.items[i].files.allSatisfy({ $0.transfer != nil }) {
                     try executeArchive(&batch, i: i, cancellation: cancellation, activity: activity)
+                } else if batch.kind == "time", batch.items[i].files.allSatisfy({ $0.timeEdit != nil }) {
+                    try executeTime(&batch, i: i, backupRoot: backupRoot, cancellation: cancellation, activity: activity)
                 } else {
                     if batch.kind == "archive" {
                         // Capture all hashes before the first mutation; cancelling here leaves the group untouched.
@@ -197,6 +164,7 @@ public final class OperationService: @unchecked Sendable {
             let indexed = Set(current.allPaths)
             if indexed == sources || indexed == destinations { try store.save(photo); return }
         }
+        if kind == "time", try saveTimeResult(photo, item: item) { return }
         try Scanner(metadata: metadata, store: store).reconcile(paths: item.files.flatMap { [$0.source, $0.destination] }, preferred: photo)
     }
     private func moveStep(_ batch: inout OperationBatch, i: Int, j: Int) throws {
@@ -263,10 +231,12 @@ public final class OperationService: @unchecked Sendable {
         for i in batch.items.indices.reversed() {
             if cancellation.isCancelled { break }
             if ["undone", "skipped", "blocked"].contains(batch.items[i].status) { continue }
-            if batch.items[i].status == "pending", !batch.items[i].files.allSatisfy({ $0.transfer != nil }) { continue }
+            if batch.items[i].status == "pending", !batch.items[i].files.allSatisfy({ $0.transfer != nil || $0.timeEdit != nil }) { continue }
             do {
                 if batch.kind == "archive", batch.items[i].files.allSatisfy({ $0.transfer != nil }) {
                     try undoArchive(&batch, i: i, cancellation: cancellation, activity: activity)
+                } else if batch.kind == "time", batch.items[i].files.allSatisfy({ $0.timeEdit != nil }) {
+                    try undoTime(&batch, i: i, cancellation: cancellation, activity: activity)
                 } else {
                     if batch.kind == "archive", !batch.items[i].files.isEmpty,
                        batch.items[i].files.allSatisfy({ $0.state == "pending" && $0.before == nil && $0.previewSnapshot != nil }) {

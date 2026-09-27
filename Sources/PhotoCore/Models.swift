@@ -133,6 +133,7 @@ public struct Fingerprint: Codable, Equatable, Sendable {
 public struct FileStep: Codable, Equatable, Sendable {
     public var source: String
     public var destination: String
+    public var timeEdit: TimeEditJournal?
     public var transfer: ArchiveTransfer?
     public var undoTransfer: ArchiveTransfer?
     public var previewSnapshot: FileSnapshot?
@@ -181,4 +182,20 @@ public struct ArchiveTransfer: Codable, Equatable, Sendable {
     public init(source: String, destination: String, original: FileSnapshot) {
         self.source = source; self.destination = destination; self.original = original
     }
+}
+
+/// New time-edit records distinguish deferred fingerprints from planned creation.
+public struct TimeEditJournal: Codable, Equatable, Sendable {
+    public var role: String // existing, new, readonly
+    public var original: FileSnapshot?
+    public var backupSnapshot: FileSnapshot?
+    public var result: FileSnapshot?
+    public var workspace: TimeWorkspace?
+    public var preparedSnapshot: FileSnapshot?
+    public init(role: String, original: FileSnapshot?) { self.role = role; self.original = original }
+}
+public struct TimeWorkspace: Codable, Equatable, Sendable {
+    public var path: String
+    public var device: Int32
+    public var inode: UInt64
 }

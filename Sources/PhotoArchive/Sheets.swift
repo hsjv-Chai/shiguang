@@ -9,7 +9,7 @@ struct PlanSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("\(batch.title)预览").font(.title2.bold())
-            Text(batch.kind == "archive" ? "将按照片组移动 JPG、CR2 及配套 XMP，按 年 / 月 / 城市 归档。重名时整组统一编号；同盘快速移动；跨盘复制校验通过后删除源文件。" : "成组照片同步校正 JPG 和 XMP；RAW 原片保持不变。写入前保存完整备份。").foregroundStyle(.secondary)
+            Text(batch.kind == "archive" ? "将按照片组移动 JPG、CR2 及配套 XMP，按 年 / 月 / 城市 归档。重名时整组统一编号；同盘快速移动；跨盘复制校验通过后删除源文件。" : "成组照片同步校正 JPG 和 XMP；RAW 原片仅检查状态、不改写。确认后为待修改文件保存完整备份并校验。").foregroundStyle(.secondary)
             HStack { Label("\(eligible) 张可执行", systemImage: "checkmark.circle"); Text("\(batch.items.count - eligible) 张跳过或有异常").foregroundStyle(.secondary); Spacer() }.font(.caption)
             List(batch.items) { item in
                 VStack(alignment: .leading, spacing: 6) {
@@ -20,7 +20,7 @@ struct PlanSheet: View {
                     else { Text("\(item.photo.capture?.display ?? "未知时间") → \(item.newCapture?.display ?? "")").font(.caption).textSelection(.enabled) }
                     ForEach(item.files.indices, id: \.self) { j in
                         let file = item.files[j]
-                        Text((file.state == "readonly" ? "只读校验：" : batch.kind == "archive" ? "移动：" : file.before == nil ? "创建：" : "写入：") + file.source).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        Text((file.state == "readonly" ? "只读校验：" : batch.kind == "archive" ? "移动：" : (file.timeEdit.map { $0.role == "new" } ?? (file.before == nil)) ? "创建：" : "写入：") + file.source).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }.padding(.vertical, 6)
             }.listStyle(.inset).frame(minHeight: 280)
