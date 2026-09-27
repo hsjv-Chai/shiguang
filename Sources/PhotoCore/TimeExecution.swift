@@ -138,6 +138,76 @@ extension OperationService {
         if f.timeEdit?.role == "new" { try timeVacant(f.source); return false }
         throw PhotoError.message("原片缺失，无法恢复校时")
     }
+    // exFAT may reject RENAME_EXCL. Reserve the final path with O_EXCL instead;
+    // the publication phase records ownership until the copied XMP is verified.
+    private func publishNewTimeFile(_ input: FileStep, report: (String, UInt64) -> Void,
+                                    save: (FileStep) throws -> Void) throws -> FileStep {
+        var f = input
+        do {
+            try checkpoint("timeExclusiveRename")
+            guard renamex_np(f.staged!, f.source, UInt32(RENAME_EXCL)) == 0 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            }
+            return f
+        } catch let error as NSError where error.domain == NSPOSIXErrorDomain && [Int(ENOTSUP), Int(ENOSYS)].contains(error.code) {
+            try timeVacant(f.source)
+            f.state = "publishing"; f.timeEdit?.publicationSnapshot = nil; try save(f)
+            let hash = try timeCopy(f.staged!, to: f.source, expected: f.timeEdit!.preparedSnapshot!, cancellation: CancellationFlag(), phase: "提交新建 XMP", created: { snapshot in
+                f.timeEdit?.publicationSnapshot = snapshot; try save(f)
+                try checkpoint("timePublicationCreated")
+            }, report: report)
+            guard hash == f.after else { throw PhotoError.message("XMP 工作副本发生变化，未确认提交") }
+            let snapshot = try FileSnapshot.read(f.source)
+            try timeVerify(f.source, f.after!, cancellation: CancellationFlag(), phase: "校验新建 XMP", report: report)
+            try timeUnchanged(f.source, snapshot)
+            try checkpoint("timePublicationVerified")
+            return f
+        }
+    }
+
+    private func recoverTimePublication(_ input: FileStep, cancellation: CancellationFlag,
+                                        report: (String, UInt64) -> Void) throws -> FileStep {
+        var f = input
+        guard f.state == "publishing", f.timeEdit?.role == "new" else { return f }
+        var info = stat()
+        if lstat(f.source, &info) != 0 && errno == ENOENT {
+            f.state = "ready"; f.timeEdit?.publicationSnapshot = nil; return f
+        }
+        let current = try FileSnapshot.read(f.source)
+        guard let owned = f.timeEdit?.publicationSnapshot, current.device == owned.device, current.inode == owned.inode,
+              let staged = f.staged, let expected = f.timeEdit?.preparedSnapshot, let after = f.after else {
+            throw PhotoError.message("新建 XMP 身份无法确认，已保留，请人工检查：" + f.source)
+        }
+        try checkWorkspace(f.timeEdit!.workspace!)
+        try timeUnchanged(staged, expected)
+        try timeVerify(staged, after, cancellation: cancellation, phase: "检查待提交 XMP", report: report)
+        guard current.size <= expected.size else { throw PhotoError.message("未完成的 XMP 已被外部修改，已保留") }
+        // A crash may leave an empty file or a prefix of our prepared XMP. Only
+        // reclaim that exact prefix; unrelated content and replaced files survive.
+        let source = try FileHandle(forReadingFrom: URL(fileURLWithPath: staged))
+        let partial = try FileHandle(forReadingFrom: URL(fileURLWithPath: f.source))
+        defer { try? source.close(); try? partial.close() }
+        var remaining = current.size
+        while remaining > 0 {
+            if cancellation.isCancelled { throw CancellationError() }
+            let amount = Int(min(remaining, 1024 * 1024))
+            let a = try source.read(upToCount: amount), b = try partial.read(upToCount: amount)
+            guard let a, let b, a.count == amount, b == a else {
+                throw PhotoError.message("未完成的 XMP 内容无法确认，已保留，请人工检查：" + f.source)
+            }
+            remaining -= Int64(amount)
+        }
+        try timeUnchanged(staged, expected); try timeUnchanged(f.source, current)
+        if current.size == expected.size {
+            f.state = "done"; f.timeEdit?.result = current
+        } else {
+            try fm.removeItem(atPath: f.source)
+            try timeSync(URL(fileURLWithPath: f.source).deletingLastPathComponent().path, directory: true)
+            f.state = "ready"; f.timeEdit?.publicationSnapshot = nil
+        }
+        return f
+    }
+
     func executeTime(_ batch: inout OperationBatch, i: Int, backupRoot: URL, cancellation: CancellationFlag,
                      activity: @Sendable (Int, Int, String) -> Void) throws {
         let count = batch.items.count
@@ -150,6 +220,10 @@ extension OperationService {
         // Recover committed members before preparing any new writes, and preflight the entire group.
         for j in batch.items[i].files.indices {
             var f = batch.items[i].files[j]
+            if f.state == "publishing" {
+                f = try recoverTimePublication(f, cancellation: cancellation, report: report)
+                batch.items[i].files[j] = f; try persist(batch, item: i)
+            }
             if f.timeEdit?.role == "readonly" { try timeOriginal(f); continue }
             if try timeCommitted(f, cancellation: cancellation, report: report) {
                 f.state = "done"; f.timeEdit?.result = try FileSnapshot.read(f.source)
@@ -201,8 +275,13 @@ extension OperationService {
             f.state = "committing"; batch.items[i].files[j] = f; try persist(batch, item: i)
             try checkpoint("timeBeforeCommit"); try timeOriginal(f)
             try timeUnchanged(f.staged!, f.timeEdit!.preparedSnapshot!)
-            let result = f.timeEdit?.role == "new" ? renamex_np(f.staged!, f.source, UInt32(RENAME_EXCL)) : rename(f.staged!, f.source)
-            guard result == 0 else { throw PhotoError.message("提交校时失败：" + String(cString: strerror(errno))) }
+            if f.timeEdit?.role == "new" {
+                f = try publishNewTimeFile(f, report: report) { updated in
+                    batch.items[i].files[j] = updated; try persist(batch, item: i)
+                }
+            } else {
+                guard rename(f.staged!, f.source) == 0 else { throw PhotoError.message("提交校时失败：" + String(cString: strerror(errno))) }
+            }
             try checkpoint("timeAfterRename")
             try timeSync(URL(fileURLWithPath: f.source).deletingLastPathComponent().path, directory: true)
             f.timeEdit?.result = try FileSnapshot.read(f.source); f.state = "done"
@@ -226,6 +305,10 @@ extension OperationService {
         // Validate every changed member and backup before restoring any member.
         for j in batch.items[i].files.indices {
             var f = batch.items[i].files[j]
+            if f.state == "publishing" {
+                f = try recoverTimePublication(f, cancellation: cancellation, report: report)
+                batch.items[i].files[j] = f; try persist(batch, item: i)
+            }
             if f.timeEdit?.role == "readonly" { try timeOriginal(f); continue }
             if f.state == "undone" { continue }
             if ["undoCommitting", "undoDeleting"].contains(f.state) {

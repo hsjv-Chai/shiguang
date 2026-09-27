@@ -192,6 +192,7 @@ public struct TimeEditJournal: Codable, Equatable, Sendable {
     public var result: FileSnapshot?
     public var workspace: TimeWorkspace?
     public var preparedSnapshot: FileSnapshot?
+    public var publicationSnapshot: FileSnapshot?
     public init(role: String, original: FileSnapshot?) { self.role = role; self.original = original }
 }
 public struct TimeWorkspace: Codable, Equatable, Sendable {

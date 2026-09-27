@@ -1,0 +1,75 @@
+warning: /Users/hsjv/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/hsjv/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'myphotos': failed storing manifest for 'myphotos' in cache: attempt to write a readonly database
+Building for debugging...
+[2 / 5] PhotoCoreChecks-product
+[5 / 8] PhotoCoreChecks-product
+[11 / 13] PhotoCoreChecks-product
+[12 / 13] PhotoCoreChecks-product
+[13 / 15] PhotoCoreChecks-product/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+
+Build complete! (1.01秒)
+PASS 日期边界与时区
+PASS 普通照片格式写入及逐字节撤销
+PASS RAW 不变及新 XMP 撤销
+PASS 保留既有 XMP 信息并恢复
+PASS 重名归档与配套文件撤销
+PASS 预览后源文件变化
+PASS 目标冲突不覆盖
+PASS 撤销拒绝外部修改
+PASS 备份失败不改原片
+PASS Canon 配对扫描和旧索引合并
+PASS Canon 配对迟到缺失和恢复
+PASS Canon 配对范围和批次边界
+PASS Canon 真正的配套歧义
+PASS Canon 时间优先级和 GPS
+PASS Canon 三种校时及逐字节撤销
+PASS Canon 既有 XMP 与零偏移同步
+PASS Canon 整组归档冲突重试和撤销
+PASS Canon 校时恢复和只读成员校验
+PASS Canon 旧历史拆分与重新合并
+PASS Canon 部分校时写入恢复和取消
+PASS Canon 整组操作前检查
+PASS Canon 旧 JPG 校时历史撤销
+PASS 跨盘流程中断后重试
+PASS 取消和恢复不重复偏移
+PASS 提交后崩溃恢复
+PASS 缺失拍摄时间
+PASS GPS 正负与手动地点持久化
+BENCHMARK: 10000 files scanned with cancellation/resume in 34.86325395107269 seconds
+PASS 一万张扫描和取消恢复
+PASS 校时兼容：不支持重命名时安全提交与恢复
+PASS 校时兼容：未完成发布的撤销和外部修改
+BENCHMARK: 384 real JPG + 15.36 GB sparse RAW preview, 3 ExifTool batches, 1.3566720485687256 seconds; local filesystem, warm cache possible; not an execution benchmark
+PASS 校时优化：批量预览与大 RAW
+PASS 校时优化：取消运行中的元数据进程
+PASS 校时优化：文件错误隔离与预览变化
+BENCHMARK: real JPG+CR2 fixtures time edit including backup, validation and XMP creation: 0.2698730230331421 seconds; local filesystem, warm cache possible
+PASS 校时优化：读取次数与小数秒
+PASS 校时优化：提交和撤销故障恢复
+PASS 校时优化：写入失败取消和 XMP 冲突
+PASS 校时优化：整组准备失败和写入取消
+PASS 校时优化：等长修改与文件替换
+PASS 校时优化：旧日志和损坏备份
+PASS 归档优化：读取次数与元数据
+PASS 归档优化：提交故障恢复
+PASS 归档优化：复制损坏与整组准备
+PASS 归档优化：写入失败取消与清理
+PASS 归档优化：外部修改与提交冲突
+PASS 归档优化：撤销故障恢复
+PASS 归档优化：删除保护与跨盘回退
+PASS 归档优化：恢复身份与旧日志兼容
+BENCHMARK: 64 MiB real data same-volume rename: 0.0013890266418457031 seconds (local filesystem; cache may be warm)
+BENCHMARK: 64 MiB real data forced copy + verify: 0.09478902816772461 seconds (local filesystem; cache may be warm)
+PASS 归档优化：真实数据计时
+BENCHMARK: 1000 JPG+CR2 groups / 80 GB sparse archive preview in 0.08645796775817871 seconds; directory listings: 1
+PASS 归档性能：80GB 批量快速预览
+PASS 归档性能：延迟校验变更检测与取消
+PASS 归档性能：执行不重读元数据
+PASS 跨盘删除前失败直接撤销
+PASS 撤销提交途中重启
+PASS 拒绝直接扫描系统照片图库
+PASS 损坏备份阻止重试写入
+RESULT: 0 failures; 60.798973083496094 seconds

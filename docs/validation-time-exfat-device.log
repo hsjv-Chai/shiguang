@@ -1,0 +1,17 @@
+Building for debugging...
+[Planning deferred tasks]
+[2 / 8]
+[3 / 9] PhotoCore
+[12 / 18] PhotoCore
+[16 / 21] PhotoCore
+[24 / 30] PhotoCoreChecks-product
+[26 / 30] PhotoCoreChecks-product
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCore: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[28 / 30] PhotoCoreChecks-product
+[30 / 32] PhotoCoreChecks-product/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/hsjv/Documents/ChatGPT/myPhotos/Package.swift: PhotoCoreChecks-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+
+Build complete! (1.71秒)
+EXFAT: isolated fixture edit, old-journal resume and byte-exact undo passed; user photos untouched
+PASS 校时兼容：真实 exFAT
+RESULT: 0 failures; 44.60184895992279 seconds

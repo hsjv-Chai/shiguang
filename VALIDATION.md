@@ -135,3 +135,15 @@
 完整回归 53 项通过，输出见 `docs/validation-time-performance.log`。本机该批量预览约 1.324 秒；真实 JPG＋CR2 夹具单组执行（含备份、校验、新建 XMP）约 0.323 秒。预览中的 RAW 为稀疏文件，执行计时使用项目内小型夹具；缓存可能已热，两者均不代表真实 SD 卡上的大照片传输或处理速度。本次未做实体设备拔插、真实断电或物理空间耗尽测试，空间不足通过错误注入验证。
 
 新版 Release 应用已构建（CFBundleVersion 4），内置 ExifTool 13.59 启动检查、打包二进制 UUID 对照及 `codesign --verify --deep --strict` 校验通过。
+
+## exFAT 新建 XMP 提交兼容性（2026-09-27）
+
+修复校时在 exFAT 上新建 XMP 时出现 `Operation not supported` 的问题：部分文件系统不支持 `renamex_np(..., RENAME_EXCL)`，但支持普通替换，因此旧批次可能处于 JPG 已完成、XMP 提交失败的组内部分完成状态。
+
+新建 XMP 首先尝试原排他重命名；仅在系统明确返回不支持时，回退为 `O_CREAT | O_EXCL | O_NOFOLLOW` 创建、复制、同步和完整内容校验，不覆盖已经存在的路径。新增可选的发布身份记录，保持旧日志兼容。发布途中中断时核对文件身份及工作副本；只有与工作副本一致的完整内容或确切前缀才可自动完成或清理后重试。外部修改或身份不明时保留文件并拒绝继续。此回退在写入期间可能短暂暴露未完成的新 XMP，恢复逻辑对此有明确处理。
+
+新增回归涵盖不支持错误、创建后中断、部分前缀、复制中断、校验后中断、失败批次直接撤销及外部修改保护。复现旧版 JPG `done`／XMP `committing` 日志后继续，确认不重复偏移 JPG。
+
+另外在真实挂载的 exFAT SD 卡上创建随机命名的独立测试目录，仅放入项目内 JPG／CR2 夹具，验证了实际触发兼容回退、新建 XMP、旧失败状态继续及逐字节撤销。测试成功后独立目录已清理，未修改 DCIM 中的用户照片。真实介质测试输出见 `docs/validation-time-exfat-device.log`；全量回归输出见 `docs/validation-time-exfat.log`。
+
+本次默认回归 55 项通过，另有 1 项真实 exFAT 集成测试通过。修复版 Release（CFBundleVersion 5）已构建，内置 ExifTool 启动及应用深度签名校验通过。

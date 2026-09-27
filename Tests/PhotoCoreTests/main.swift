@@ -46,6 +46,8 @@ let cases: [(String, () throws -> Void)] = [
     ("一万张扫描和取消恢复", tests.testTenThousandScanAndCancellation)
 ]
 let extra: [(String, () throws -> Void)] = [
+    ("校时兼容：不支持重命名时安全提交与恢复", tests.testTimeUnsupportedRenameFallback),
+    ("校时兼容：未完成发布的撤销和外部修改", tests.testTimePublicationUndoAndConflict),
     ("校时优化：批量预览与大 RAW", tests.testTimePreviewBatchesAndLargeRAW),
     ("校时优化：取消运行中的元数据进程", tests.testTimePreviewCancelsRunningMetadataProcess),
     ("校时优化：文件错误隔离与预览变化", tests.testTimePreviewIsolationAndChanges),
@@ -72,9 +74,12 @@ let extra: [(String, () throws -> Void)] = [
     ("拒绝直接扫描系统照片图库", tests.testPhotosLibraryIsNotTraversed),
     ("损坏备份阻止重试写入", tests.testCorruptBackupPreventsRetryMutation)
 ]
+let volumeChecks: [(String, () throws -> Void)] = ProcessInfo.processInfo.environment["PHOTOARCHIVE_EXFAT_TEST_ROOT"] == nil ? [] : [
+    ("校时兼容：真实 exFAT", tests.testTimeExFATIntegration)
+]
 setbuf(stdout, nil)
 let start = Date()
-for (name, test) in cases + extra {
+for (name, test) in cases + extra + volumeChecks {
     if let filter = CommandLine.arguments.dropFirst().first, !name.contains(filter) { continue }
     let count = failures.count
     do { try tests.setUpWithError(); try test() } catch { fail("\(name): \(error)", #filePath, #line) }
